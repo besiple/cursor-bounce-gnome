@@ -334,9 +334,9 @@ export class CursorBounce {
   }
 
   _computeBasePosition(cx, cy) {
-    // Tucked close to cursor arrow flank (cx + 11, cy + 8)
+    // Tucked close to cursor arrow flank (cx + 11, cy + 12 - lowered slightly for snug alignment)
     let baseX = cx + 11;
-    let baseY = cy + 8;
+    let baseY = cy + 12;
 
     let monitor = Main.layoutManager.currentMonitor;
     if (monitor) {
@@ -363,18 +363,18 @@ export class CursorBounce {
     let [px, py] = global.get_pointer();
     let [baseX, baseY] = this._computeBasePosition(px, py);
 
-    // 1. Intro pop-in (first 80ms)
-    let introT = Math.min(1.0, elapsedMs / 80.0);
+    // 1. Intro pop-in (smooth 110ms ease)
+    let introT = Math.min(1.0, elapsedMs / 110.0);
 
-    // 2. Outro ease-out transition (150ms)
+    // 2. Outro ease-out transition (silky 180ms cubic ease)
     if (b.exiting) {
       let exitElapsedMs = (now - b.exitStartTime) / 1000.0;
-      let exitProgress = Math.min(1.0, exitElapsedMs / 150.0);
+      let exitProgress = Math.min(1.0, exitElapsedMs / 180.0);
 
-      let ease = Math.sin((exitProgress * Math.PI) / 2.0);
+      let ease = 1.0 - Math.pow(1.0 - exitProgress, 3);
       let opacity = Math.max(0, Math.round(b.exitStartOpacity * (1.0 - ease)));
-      let scale = b.exitStartScaleX * (1.0 + 0.20 * ease);
-      let exitY = b.exitStartDisplacementY - 10.0 * ease;
+      let scale = b.exitStartScaleX * (1.0 + 0.15 * ease);
+      let exitY = b.exitStartDisplacementY - 8.0 * ease;
 
       b.actor.opacity = opacity;
       b.actor.set_scale(scale, scale);
@@ -387,10 +387,9 @@ export class CursorBounce {
       return GLib.SOURCE_CONTINUE;
     }
 
-    // 3. Signature KDE Bounce Physics
-    // Compact, bouncy 420ms cycle, 11px bounce height
-    const PERIOD = 420.0;
-    const BOUNCE_HEIGHT = 11.0;
+    // 3. Signature KDE Bounce Physics (silky smooth, 520ms period, gentle 12px height)
+    const PERIOD = 520.0;
+    const BOUNCE_HEIGHT = 12.0;
     let cycleTime = elapsedMs % PERIOD;
     let cycleT = cycleTime / PERIOD; // 0.0 to 1.0
 
@@ -398,34 +397,38 @@ export class CursorBounce {
     let scaleX = 1.0;
     let scaleY = 1.0;
 
-    if (cycleT < 0.82) {
-      // In air: parabolic projectile under constant gravity
-      let flightT = cycleT / 0.82;
+    if (cycleT < 0.80) {
+      // In air: parabolic projectile with fluid apex hang time
+      let flightT = cycleT / 0.80;
       let parabola = 4.0 * flightT * (1.0 - flightT); // peaks at 1.0 when flightT = 0.5
       dispY = -parabola * BOUNCE_HEIGHT;
 
-      // Elastic stretch as it shoots upwards
-      if (flightT < 0.28) {
-        let stretch = (1.0 - flightT / 0.28);
-        scaleY = 1.0 + 0.10 * stretch;
-        scaleX = 1.0 - 0.05 * stretch;
+      // Elastic stretch as it shoots upwards, relaxed at apex, gentle stretch on fall
+      if (flightT < 0.35) {
+        let stretch = Math.sin((flightT / 0.35) * Math.PI);
+        scaleY = 1.0 + 0.12 * stretch;
+        scaleX = 1.0 - 0.06 * stretch;
+      } else if (flightT > 0.65) {
+        let fall = (flightT - 0.65) / 0.35;
+        scaleY = 1.0 + 0.08 * fall;
+        scaleX = 1.0 - 0.04 * fall;
       }
     } else {
-      // Ground impact / Squash & Rebound (remaining 18% of cycle ~75ms)
-      let groundT = (cycleT - 0.82) / 0.18;
+      // Ground cushion & rubber squash (remaining 20% of cycle ~104ms)
+      let groundT = (cycleT - 0.80) / 0.20;
       let squash = Math.sin(groundT * Math.PI); // 0 -> 1 -> 0
 
-      dispY = 0.0;
-      scaleY = 1.0 - 0.20 * squash; // squashes down to 80% height
-      scaleX = 1.0 + 0.15 * squash; // expands to 115% width
+      dispY = squash * 1.5; // slight 1.5px organic dip during squash
+      scaleY = 1.0 - 0.16 * squash; // squashes to 84% height
+      scaleX = 1.0 + 0.12 * squash; // expands to 112% width
     }
 
     // Apply intro scaling
     if (introT < 1.0) {
       let easeIn = Math.sin((introT * Math.PI) / 2.0);
       b.actor.opacity = Math.round(255 * easeIn);
-      scaleX *= (0.3 + 0.7 * easeIn);
-      scaleY *= (0.3 + 0.7 * easeIn);
+      scaleX *= (0.4 + 0.6 * easeIn);
+      scaleY *= (0.4 + 0.6 * easeIn);
     } else {
       b.actor.opacity = 255;
     }
