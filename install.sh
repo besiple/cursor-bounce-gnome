@@ -34,8 +34,11 @@ if [ -d "/usr/share/icons/macOS/cursors" ]; then
     mkdir -p "${HOME}/.local/share/icons"
     rm -rf "${HOME}/.local/share/icons/macOS"
     cp -a /usr/share/icons/macOS "${HOME}/.local/share/icons/" 2>/dev/null || true
-    rm -f "${HOME}/.local/share/icons/macOS/cursors/left_ptr_watch"
+    rm -f "${HOME}/.local/share/icons/macOS/cursors/left_ptr_watch" "${HOME}/.local/share/icons/macOS/cursors/wait" "${HOME}/.local/share/icons/macOS/cursors/watch" "${HOME}/.local/share/icons/macOS/cursors/progress"
     ln -s left_ptr "${HOME}/.local/share/icons/macOS/cursors/left_ptr_watch" 2>/dev/null || true
+    ln -s left_ptr "${HOME}/.local/share/icons/macOS/cursors/wait" 2>/dev/null || true
+    ln -s left_ptr "${HOME}/.local/share/icons/macOS/cursors/watch" 2>/dev/null || true
+    ln -s left_ptr "${HOME}/.local/share/icons/macOS/cursors/progress" 2>/dev/null || true
     # Reload cursor theme setting if possible
     if command -v gsettings &>/dev/null; then
         CURRENT_THEME=$(gsettings get org.gnome.desktop.interface cursor-theme | tr -d "'")
