@@ -11,6 +11,7 @@ export class CursorBounce {
     this._enabled = false;
     this._activeBounce = null;
     this._signalIds = [];
+    this._origMethods = [];
     this._timerId = null;
     this._timeoutId = null;
   }
@@ -19,7 +20,52 @@ export class CursorBounce {
     if (this._enabled) return;
     this._enabled = true;
 
-    // 1. AppState transitions (app starts loading)
+    // 1. Direct Shell.App prototype hooks (catches Telegram, Antigravity, and ALL apps launched via Dock, App Grid, Search, etc.)
+    try {
+      const self = this;
+      const wrapMethod = (name, checkShouldBounce) => {
+        let orig = Shell.App.prototype[name];
+        if (typeof orig !== 'function') return;
+        this._origMethods.push({ name, orig });
+
+        Shell.App.prototype[name] = function (...args) {
+          try {
+            if (self._enabled && checkShouldBounce(this, args)) {
+              self.start(this);
+            }
+          } catch (e) {
+            console.log(`[KDE Cursor Bounce] Hook ${name} error:`, e);
+          }
+          return orig.apply(this, args);
+        };
+      };
+
+      wrapMethod('activate', (app) => {
+        return !app.get_n_windows || app.get_n_windows() === 0;
+      });
+
+      wrapMethod('activate_full', (app) => {
+        return !app.get_n_windows || app.get_n_windows() === 0;
+      });
+
+      wrapMethod('open_new_window', () => true);
+
+      wrapMethod('launch', (app) => {
+        return !app.get_n_windows || app.get_n_windows() === 0;
+      });
+
+      wrapMethod('activate_action', (app, args) => {
+        let action = args && args[0];
+        if (action === 'new-window' || action === 'app.new-window' || (!app.get_n_windows || app.get_n_windows() === 0)) {
+          return true;
+        }
+        return false;
+      });
+    } catch (e) {
+      console.log('[KDE Cursor Bounce] Shell.App hook error:', e);
+    }
+
+    // 2. AppState transitions (app starts loading via system events)
     try {
       let appSystem = Shell.AppSystem.get_default();
       if (appSystem) {
@@ -38,7 +84,7 @@ export class CursorBounce {
       console.log('[KDE Cursor Bounce] AppSystem hook error:', e);
     }
 
-    // 2. Startup sequence notification (FreeDesktop / Wayland launch tokens)
+    // 3. Startup sequence notification (FreeDesktop / Wayland launch tokens)
     try {
       let tracker = Shell.WindowTracker.get_default();
       if (tracker) {
@@ -83,7 +129,7 @@ export class CursorBounce {
       console.log('[KDE Cursor Bounce] WindowTracker hook error:', e);
     }
 
-    // 3. Window created hook: immediately stop bouncing when a window appears
+    // 4. Window created hooks: immediately stop bouncing when a window appears
     try {
       if (global.display) {
         this._connect(global.display, 'window-created', () => {
@@ -95,11 +141,29 @@ export class CursorBounce {
     } catch (e) {
       console.log('[KDE Cursor Bounce] window-created hook error:', e);
     }
+
+    try {
+      let tracker = Shell.WindowTracker.get_default();
+      if (tracker) {
+        this._connect(tracker, 'tracked-windows-changed', () => {
+          if (this._activeBounce) {
+            this.stop();
+          }
+        });
+      }
+    } catch (e) {}
   }
 
   disable() {
     if (!this._enabled) return;
     this._enabled = false;
+
+    for (let { name, orig } of this._origMethods) {
+      try {
+        Shell.App.prototype[name] = orig;
+      } catch (e) {}
+    }
+    this._origMethods = [];
 
     this._disconnectAll();
     this._cleanupBounce();
@@ -165,20 +229,28 @@ export class CursorBounce {
           icon_size: ICON_SIZE,
         });
       } else if (app) {
-        let gicon = null;
-        if (typeof app.get_icon === 'function') {
-          gicon = app.get_icon();
-        }
-        if (!gicon && typeof app.get_app_info === 'function' && app.get_app_info()) {
-          gicon = app.get_app_info().get_icon();
-        }
-        if (gicon) {
-          icon = new St.Icon({
-            gicon: gicon,
-            icon_size: ICON_SIZE,
-          });
-        } else if (typeof app.create_icon_texture === 'function') {
-          icon = app.create_icon_texture(ICON_SIZE);
+        // Priority 1: native create_icon_texture
+        try {
+          if (typeof app.create_icon_texture === 'function') {
+            icon = app.create_icon_texture(ICON_SIZE);
+          }
+        } catch (e) {}
+
+        // Priority 2: GIcon resolution
+        if (!icon) {
+          let gicon = null;
+          try {
+            if (typeof app.get_icon === 'function') gicon = app.get_icon();
+            if (!gicon && typeof app.get_app_info === 'function' && app.get_app_info()) {
+              gicon = app.get_app_info().get_icon();
+            }
+            if (gicon) {
+              icon = new St.Icon({
+                gicon: gicon,
+                icon_size: ICON_SIZE,
+              });
+            }
+          } catch (e) {}
         }
       }
 
