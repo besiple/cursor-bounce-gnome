@@ -32,8 +32,10 @@ echo -e "${GREEN}✓ Installed into ${EXT_DIR}${RESET}"
 echo -e "\n${BOLD}[2/3] Configuring cursor launch feedback...${RESET}"
 if [ -d "/usr/share/icons/macOS/cursors" ]; then
     mkdir -p "${HOME}/.local/share/icons"
-    cp -r /usr/share/icons/macOS "${HOME}/.local/share/icons/" 2>/dev/null || true
-    ln -sf left_ptr "${HOME}/.local/share/icons/macOS/cursors/left_ptr_watch" 2>/dev/null || true
+    rm -rf "${HOME}/.local/share/icons/macOS"
+    cp -a /usr/share/icons/macOS "${HOME}/.local/share/icons/" 2>/dev/null || true
+    rm -f "${HOME}/.local/share/icons/macOS/cursors/left_ptr_watch"
+    ln -s left_ptr "${HOME}/.local/share/icons/macOS/cursors/left_ptr_watch" 2>/dev/null || true
     # Reload cursor theme setting if possible
     if command -v gsettings &>/dev/null; then
         CURRENT_THEME=$(gsettings get org.gnome.desktop.interface cursor-theme | tr -d "'")

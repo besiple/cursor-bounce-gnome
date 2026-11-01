@@ -25,4 +25,17 @@ except Exception as e:
 fi
 
 rm -rf "${EXT_DIR}"
-echo "Extension removed."
+
+if [ -d "${HOME}/.local/share/icons/macOS" ]; then
+    rm -rf "${HOME}/.local/share/icons/macOS"
+    if command -v gsettings &>/dev/null; then
+        CURRENT_THEME=$(gsettings get org.gnome.desktop.interface cursor-theme | tr -d "'")
+        if [ "$CURRENT_THEME" = "macOS" ]; then
+            gsettings set org.gnome.desktop.interface cursor-theme 'Adwaita'
+            sleep 0.1
+            gsettings set org.gnome.desktop.interface cursor-theme 'macOS'
+        fi
+    fi
+fi
+
+echo "Extension removed and default cursor restored."
