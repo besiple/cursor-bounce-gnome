@@ -1,0 +1,16 @@
+{
+  "name": "KDE Cursor Bounce",
+  "description": "KDE Plasma style bouncing application launch feedback animation for GNOME Shell.",
+  "uuid": "cursor-bounce@besiple",
+  "shell-version": [
+    "45",
+    "46",
+    "47",
+    "48",
+    "49",
+    "50",
+    "51"
+  ],
+  "url": "https://github.com/besiple/cursor-bounce-gnome",
+  "version": 1
+}
