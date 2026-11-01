@@ -19,7 +19,7 @@ echo -e "${BOLD}${CYAN}=========================================================
 echo "    🎯 Installing KDE Cursor Bounce for GNOME Shell       "
 echo -e "==========================================================${RESET}\n"
 
-# 1. Install Extension
+# 1. Install Extension Files
 echo -e "${BOLD}[1/3] Installing extension files...${RESET}"
 mkdir -p "${EXT_DIR}"
 cp "${SCRIPT_DIR}/metadata.json" "${EXT_DIR}/"
@@ -28,25 +28,48 @@ cp "${SCRIPT_DIR}/cursorBounce.js" "${EXT_DIR}/"
 
 echo -e "${GREEN}✓ Installed into ${EXT_DIR}${RESET}"
 
-# 2. Configure cursor (remove spinning beachball in favor of clean arrow cursor)
+# 2. Configure Cursor Launch Feedback (suppress spinning rainbow beachball)
 echo -e "\n${BOLD}[2/3] Configuring cursor launch feedback...${RESET}"
 if [ -d "/usr/share/icons/macOS/cursors" ]; then
     mkdir -p "${HOME}/.local/share/icons"
     cp -r /usr/share/icons/macOS "${HOME}/.local/share/icons/" 2>/dev/null || true
     ln -sf left_ptr "${HOME}/.local/share/icons/macOS/cursors/left_ptr_watch" 2>/dev/null || true
-    echo -e "${GREEN}✓ Clean arrow pointer configured (busy wheel suppressed)${RESET}"
+    # Reload cursor theme setting if possible
+    if command -v gsettings &>/dev/null; then
+        CURRENT_THEME=$(gsettings get org.gnome.desktop.interface cursor-theme | tr -d "'")
+        if [ "$CURRENT_THEME" = "macOS" ]; then
+            gsettings set org.gnome.desktop.interface cursor-theme 'Adwaita'
+            sleep 0.1
+            gsettings set org.gnome.desktop.interface cursor-theme 'macOS'
+        fi
+    fi
+    echo -e "${GREEN}✓ Clean arrow pointer configured (busy beachball wheel suppressed)${RESET}"
 fi
 
-# 3. Enable extension
-echo -e "\n${BOLD}[3/3] Enabling extension...${RESET}"
-if command -v gnome-extensions &>/dev/null; then
-    sleep 0.5
-    gnome-extensions enable "${UUID}" 2>/dev/null || true
-    echo -e "${GREEN}✓ Extension enabled!${RESET}"
-else
-    echo -e "${YELLOW}Please restart GNOME Shell or log out and in to load the extension.${RESET}"
+# 3. Enable Extension
+echo -e "\n${BOLD}[3/3] Registering & enabling extension...${RESET}"
+if command -v gsettings &>/dev/null; then
+    python3 -c "
+import ast, subprocess
+try:
+    raw = subprocess.check_output(['gsettings', 'get', 'org.gnome.shell', 'enabled-extensions']).decode().strip()
+    exts = ast.literal_eval(raw)
+    if '${UUID}' not in exts:
+        exts.append('${UUID}')
+        subprocess.run(['gsettings', 'set', 'org.gnome.shell', 'enabled-extensions', str(exts)], check=True)
+except Exception as e:
+    pass
+" 2>/dev/null || true
 fi
+
+if command -v gnome-extensions &>/dev/null; then
+    gnome-extensions enable "${UUID}" 2>/dev/null || true
+fi
+
+echo -e "${GREEN}✓ Extension registered in enabled-extensions!${RESET}"
 
 echo -e "\n${BOLD}${GREEN}=========================================================="
 echo "         🎉 KDE Cursor Bounce successfully installed!     "
 echo -e "==========================================================${RESET}\n"
+echo -e "${YELLOW}NOTE: On Wayland sessions, GNOME Shell only indexes new extensions on startup."
+echo -e "Please ${BOLD}Log Out and Log In${RESET}${YELLOW} (or restart) to activate the animation.${RESET}\n"
